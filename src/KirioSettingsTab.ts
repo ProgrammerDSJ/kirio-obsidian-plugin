@@ -14,9 +14,6 @@ export class KirioSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    // Page heading — using the official Obsidian API
-    new Setting(containerEl).setName('Kirio').setHeading();
-
     // ── Account status ───────────────────────────────────────────────────
     const { data: { session } } = await getSupabase().auth.getSession();
 
