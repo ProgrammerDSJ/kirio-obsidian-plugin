@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { Plugin } from 'obsidian';
 import { KirioView, KIRIO_VIEW_TYPE } from './KirioView';
 import { KirioSettingsTab } from './KirioSettingsTab';
 import { initSupabase } from './supabaseClient';
@@ -36,16 +36,16 @@ export default class KirioPlugin extends Plugin {
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(KIRIO_VIEW_TYPE);
 
-    let leaf: WorkspaceLeaf;
     if (existing.length > 0) {
-      leaf = existing[0];
-    } else {
-      const rightLeaf = workspace.getRightLeaf(false);
-      if (!rightLeaf) return;
-      leaf = rightLeaf;
-      await leaf.setViewState({ type: KIRIO_VIEW_TYPE, active: true });
+      // Panel already exists — just bring it into focus
+      workspace.setActiveLeaf(existing[0], { focus: true });
+      return;
     }
-    workspace.revealLeaf(leaf);
+
+    // Create the panel in the right sidebar
+    const leaf = workspace.getRightLeaf(false);
+    if (!leaf) return;
+    await leaf.setViewState({ type: KIRIO_VIEW_TYPE, active: true });
   }
 
   async loadSettings() {
