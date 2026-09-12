@@ -3,7 +3,7 @@
   "name": "Kirio",
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
-  "description": "View and navigate your Kirio web highlights inside the app.",
+  "description": "View and navigate your Kirio web highlights inside your notes.",
   "author": "Devansh Jhawar",
   "authorUrl": "https://github.com/ProgrammerDSJ",
   "isDesktopOnly": true
