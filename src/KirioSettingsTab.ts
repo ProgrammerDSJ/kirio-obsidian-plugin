@@ -14,7 +14,8 @@ export class KirioSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'Kirio' });
+    // Page heading — using the official Obsidian API
+    new Setting(containerEl).setName('Kirio').setHeading();
 
     // ── Account status ───────────────────────────────────────────────────
     const { data: { session } } = await getSupabase().auth.getSession();
@@ -40,10 +41,9 @@ export class KirioSettingsTab extends PluginSettingTab {
           .onClick(() => (this.plugin as any).activateView()));
     }
 
-    containerEl.createEl('hr');
-
     // ── Connection info (read-only) ──────────────────────────────────────
-    containerEl.createEl('h3', { text: 'Connection' });
+    new Setting(containerEl).setName('Connection').setHeading();
+
     containerEl.createEl('p', {
       text: 'These credentials are pre-configured and connect Kirio to your Supabase project.',
       cls: 'kirio-settings-desc',
@@ -67,9 +67,9 @@ export class KirioSettingsTab extends PluginSettingTab {
       cls: 'kirio-settings-hint',
     });
 
-    containerEl.createEl('hr');
-
     // ── About ────────────────────────────────────────────────────────────
+    new Setting(containerEl).setName('About').setHeading();
+
     new Setting(containerEl)
       .setName('Version')
       .setDesc('1.0.0');
