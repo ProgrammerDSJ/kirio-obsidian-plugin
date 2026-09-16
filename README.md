@@ -1,5 +1,7 @@
 # 🔖 Kirio Web Highlighter – Obsidian Plugin
 
+You can use the Kirio Web Highlighter Chrome Extension here - https://chromewebstore.google.com/detail/einiamlaimngbponhhedmmgbjepgeclo?utm_source=item-share-cb
+
 The official companion Obsidian plugin for the **Kirio Web Highlighter**. Seamlessly sync your web highlights, notes, and annotations directly into your Obsidian vault. 
 
 Kirio bridges the gap between your web research and your personal knowledge management system by bringing all your colored highlights into a dedicated, searchable sidebar right inside Obsidian.
