@@ -37,15 +37,20 @@ export default class KirioPlugin extends Plugin {
     const existing = workspace.getLeavesOfType(KIRIO_VIEW_TYPE);
 
     if (existing.length > 0) {
-      // Panel already exists — just bring it into focus
-      workspace.setActiveLeaf(existing[0], { focus: true });
+      // Panel already exists — revealLeaf expands the sidebar AND focuses the leaf.
+      // The old setActiveLeaf() only focused it internally; if the right sidebar
+      // was collapsed it stayed hidden and nothing appeared to happen.
+      workspace.revealLeaf(existing[0]);
       return;
     }
 
-    // Create the panel in the right sidebar
-    const leaf = workspace.getRightLeaf(false);
+    // getRightLeaf(true) creates the right sidebar pane when it doesn't exist yet.
+    // The old value of false returned null whenever the sidebar was closed/empty,
+    // causing the guard `if (!leaf) return` to silently bail out — panel never opened.
+    const leaf = workspace.getRightLeaf(true);
     if (!leaf) return;
     await leaf.setViewState({ type: KIRIO_VIEW_TYPE, active: true });
+    workspace.revealLeaf(leaf);
   }
 
   async loadSettings() {
