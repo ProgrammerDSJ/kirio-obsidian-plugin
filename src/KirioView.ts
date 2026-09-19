@@ -281,7 +281,7 @@ export class KirioView extends ItemView {
 
     const bar = card.createDiv('kirio-color-bar');
     const accentColor = h.color_tag?.startsWith('#') ? h.color_tag : '#fef08a';
-    bar.style.backgroundColor = accentColor;
+    bar.setCssProps({ '--kirio-bar-color': accentColor });
 
     const body = card.createDiv('kirio-card-body');
 
@@ -423,9 +423,8 @@ export class KirioView extends ItemView {
 
     const card = container.createDiv('kirio-card');
 
-    // Red accent bar for all YouTube annotations
-    const bar = card.createDiv('kirio-color-bar');
-    bar.style.backgroundColor = '#fca5a5'; // kirio-red hex
+    // Red accent bar for all YouTube annotations — color set via CSS class
+    card.createDiv('kirio-color-bar kirio-color-bar--yt');
 
     const body = card.createDiv('kirio-card-body');
 

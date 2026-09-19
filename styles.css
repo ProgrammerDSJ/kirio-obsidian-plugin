@@ -97,7 +97,10 @@
   overflow: hidden; transition: box-shadow 0.15s;
 }
 .kirio-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.kirio-color-bar { width: 5px; flex-shrink: 0; border-radius: 8px 0 0 8px; }
+/* Color bar — color driven by --kirio-bar-color set via setCssProps() */
+.kirio-color-bar { width: 5px; flex-shrink: 0; border-radius: 8px 0 0 8px; background-color: var(--kirio-bar-color, #fef08a); }
+/* YouTube annotations always use the red bar */
+.kirio-color-bar--yt { --kirio-bar-color: #fca5a5; }
 .kirio-card-body { padding: 9px 10px; flex: 1; min-width: 0; }
 .kirio-card-text { font-size: 12px; line-height: 1.55; color: var(--text-normal); margin: 0 0 7px 0; word-break: break-word; }
 
@@ -290,11 +293,6 @@
 .kirio-ann-no-content {
   color: var(--text-faint) !important;
   font-style: italic;
-}
-
-/* Red left bar for YouTube annotation cards */
-.kirio-card .kirio-color-bar[style*="fca5a5"] {
-  background-color: #fca5a5;
 }
 
 /* Video header: title row with play icon */
