@@ -1,14 +1,11 @@
 import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import { getSupabase } from './supabaseClient';
 import { LoginModal } from './LoginModal';
-import { Highlight } from './types';
+import { Highlight, YtAnnotation } from './types';
 
 export const KIRIO_VIEW_TYPE = 'kirio-highlights-view';
 
-// ── Color → Obsidian callout type mapping ─────────────────────────────────
-// Each type is defined in styles.css with:
-//   - lucide-highlighter icon (same for all)
-//   - the matching color from the browser extension
+// ── Color → Obsidian callout type mapping (web highlights) ────────────────
 const HEX_TO_CALLOUT: Record<string, string> = {
   '#fef08a': 'kirio-yellow',
   '#f9a8d4': 'kirio-pink',
@@ -21,35 +18,78 @@ function getCalloutType(hexColor: string): string {
   return HEX_TO_CALLOUT[hexColor?.toLowerCase()] ?? 'kirio-yellow';
 }
 
+// ── Label config (mirrors extension) ──────────────────────────────────────
+const YT_LABELS: Record<string, { icon: string; label: string }> = {
+  note:      { icon: '📝', label: 'Note' },
+  question:  { icon: '❓', label: 'Question' },
+  important: { icon: '⭐', label: 'Important' },
+  idea:      { icon: '💡', label: 'Idea' },
+};
+
+// ── Callout generators ─────────────────────────────────────────────────────
+
 /**
- * Generates a copy-paste-ready Obsidian callout for a highlight.
- * Example:
- *   > [!kirio-pink] [Page Title ↗](url#kirio-id)
- *   > "Highlighted text"
+ * Web-highlight callout (existing format).
+ * > [!kirio-pink] [Page Title ↗](url#kirio-id)
+ * > "Highlighted text"
  */
-function generateCallout(h: Highlight): string {
+function generateHighlightCallout(h: Highlight): string {
   const calloutType = h.color_tag?.startsWith('#')
     ? getCalloutType(h.color_tag)
     : 'kirio-yellow';
 
-  const title      = h.title || (() => { try { return new URL(h.url).hostname; } catch { return h.url; } })();
-  const deepLink   = `${h.url}#kirio-${h.id}`;
+  const title       = h.title || (() => { try { return new URL(h.url).hostname; } catch { return h.url; } })();
+  const deepLink    = `${h.url}#kirio-${h.id}`;
   const escapedText = h.text.replace(/>/g, '\\>');
 
   return `> [!${calloutType}] [${title} ↗](${deepLink})\n> "${escapedText}"`;
 }
 
-// ── View ──────────────────────────────────────────────────────────────────
-export class KirioView extends ItemView {
-  private highlights: Highlight[] = [];
+/**
+ * YouTube annotation callout — always kirio-red.
+ * > [!kirio-red] [Video Title ↗](https://youtube.com/watch?v=ID&t=Ns)
+ * > ⏱ 13:41 · ⭐ Important
+ * > "Annotation content"
+ */
+function generateAnnotationCallout(a: YtAnnotation): string {
+  const cfg        = YT_LABELS[a.label] ?? YT_LABELS.note;
+  const videoUrl   = `https://www.youtube.com/watch?v=${a.video_id}&t=${a.seconds}s`;
+  const title      = a.video_title || `YouTube — ${a.video_id}`;
+  const timestamp  = formatSeconds(a.seconds);
+  const labelLine  = `${cfg.icon} ${cfg.label}`;
+  const timeLine   = `⏱ ${timestamp}`;
 
-  constructor(leaf: WorkspaceLeaf) {
-    super(leaf);
+  const lines = [
+    `> [!kirio-red] [${title} ↗](${videoUrl})`,
+    `> ${timeLine} · ${labelLine}`,
+  ];
+  if (a.content) {
+    lines.push(`> "${a.content.replace(/>/g, '\\>')}"`);
   }
+  return lines.join('\n');
+}
 
-  getViewType(): string  { return KIRIO_VIEW_TYPE; }
+function formatSeconds(sec: number): string {
+  const s = Math.floor(sec) % 60;
+  const m = Math.floor(sec / 60) % 60;
+  const h = Math.floor(sec / 3600);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
+
+// ── View ──────────────────────────────────────────────────────────────────
+type Tab = 'highlights' | 'youtube';
+
+export class KirioView extends ItemView {
+  private highlights: Highlight[]    = [];
+  private annotations: YtAnnotation[] = [];
+  private activeTab: Tab = 'highlights';
+
+  constructor(leaf: WorkspaceLeaf) { super(leaf); }
+
+  getViewType():    string { return KIRIO_VIEW_TYPE; }
   getDisplayText(): string { return 'Kirio Highlights'; }
-  getIcon(): string { return 'bookmark'; }
+  getIcon():        string { return 'bookmark'; }
 
   async onOpen() { await this.render(); }
 
@@ -65,11 +105,11 @@ export class KirioView extends ItemView {
       this.renderGuest(root);
     } else {
       this.renderShell(root);
-      await this.loadHighlights(root);
+      await this.loadActiveTab(root);
     }
   }
 
-  // ── Guest state ─────────────────────────────────────────────────────────
+  // ── Guest state ──────────────────────────────────────────────────────────
   private renderGuest(root: HTMLElement) {
     const wrap = root.createDiv('kirio-guest');
     wrap.createEl('div', { text: '🔖', cls: 'kirio-guest-icon' });
@@ -84,8 +124,9 @@ export class KirioView extends ItemView {
     });
   }
 
-  // ── Logged-in shell ─────────────────────────────────────────────────────
+  // ── Logged-in shell (header + tabs) ─────────────────────────────────────
   private renderShell(root: HTMLElement) {
+    // ── Top header row ──────────────────────────────────────────────────
     const header = root.createDiv('kirio-header');
 
     const brand = header.createDiv('kirio-brand-row');
@@ -94,11 +135,11 @@ export class KirioView extends ItemView {
 
     const actions = header.createDiv('kirio-header-actions');
 
-    const refreshBtn = actions.createEl('button', { cls: 'kirio-icon-btn', title: 'Refresh highlights', text: '↻' });
+    const refreshBtn = actions.createEl('button', { cls: 'kirio-icon-btn', title: 'Refresh', text: '↻' });
     refreshBtn.addEventListener('click', async () => {
       const content = root.querySelector('.kirio-content') as HTMLElement | null;
       if (content) { content.empty(); content.createEl('p', { text: 'Refreshing…', cls: 'kirio-loading' }); }
-      await this.loadHighlights(root);
+      await this.loadActiveTab(root);
     });
 
     const logoutBtn = actions.createEl('button', { text: 'Logout', cls: 'kirio-logout-btn' });
@@ -107,9 +148,49 @@ export class KirioView extends ItemView {
       new Notice('Logged out of Kirio.');
       await this.render();
     });
+
+    // ── Tab bar ─────────────────────────────────────────────────────────
+    const tabBar = root.createDiv('kirio-tab-bar');
+
+    const highlightsTab = tabBar.createEl('button', {
+      text: '🔖 Highlights',
+      cls: 'kirio-tab' + (this.activeTab === 'highlights' ? ' kirio-tab-active' : ''),
+    });
+    const ytTab = tabBar.createEl('button', {
+      text: '▶ YouTube',
+      cls: 'kirio-tab' + (this.activeTab === 'youtube' ? ' kirio-tab-active' : ''),
+    });
+
+    highlightsTab.addEventListener('click', async () => {
+      if (this.activeTab === 'highlights') return;
+      this.activeTab = 'highlights';
+      highlightsTab.classList.add('kirio-tab-active');
+      ytTab.classList.remove('kirio-tab-active');
+      await this.loadActiveTab(root);
+    });
+
+    ytTab.addEventListener('click', async () => {
+      if (this.activeTab === 'youtube') return;
+      this.activeTab = 'youtube';
+      ytTab.classList.add('kirio-tab-active');
+      highlightsTab.classList.remove('kirio-tab-active');
+      await this.loadActiveTab(root);
+    });
   }
 
-  // ── Data loading ────────────────────────────────────────────────────────
+  // ── Route to the active tab's loader ────────────────────────────────────
+  private async loadActiveTab(root: HTMLElement) {
+    if (this.activeTab === 'highlights') {
+      await this.loadHighlights(root);
+    } else {
+      await this.loadAnnotations(root);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── TAB 1: WEB HIGHLIGHTS ────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
   async loadHighlights(root: HTMLElement) {
     let content = root.querySelector('.kirio-content') as HTMLElement | null;
     if (content) content.empty();
@@ -129,22 +210,20 @@ export class KirioView extends ItemView {
     content.empty();
 
     if (error) { content.createEl('p', { text: `Error: ${error.message}`, cls: 'kirio-error' }); return; }
-    if (!data || data.length === 0) { this.renderEmpty(content); return; }
+    if (!data || data.length === 0) { this.renderHighlightsEmpty(content); return; }
 
     this.highlights = data as Highlight[];
-    this.renderHighlights(content);
+    this.renderHighlightsList(content);
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────
-  private renderEmpty(container: HTMLElement) {
+  private renderHighlightsEmpty(container: HTMLElement) {
     const wrap = container.createDiv('kirio-empty');
     wrap.createEl('div', { text: '✏️', cls: 'kirio-empty-icon' });
     wrap.createEl('p', { text: 'No highlights yet.' });
     wrap.createEl('p', { text: 'Highlight text on any webpage using the Kirio browser extension.', cls: 'kirio-empty-sub' });
   }
 
-  // ── Highlights list ──────────────────────────────────────────────────────
-  private renderHighlights(container: HTMLElement) {
+  private renderHighlightsList(container: HTMLElement) {
     const grouped = new Map<string, Highlight[]>();
     for (const h of this.highlights) {
       if (!grouped.has(h.url)) grouped.set(h.url, []);
@@ -152,7 +231,7 @@ export class KirioView extends ItemView {
     }
 
     // Search bar
-    const searchWrap = container.createDiv('kirio-search-wrap');
+    const searchWrap  = container.createDiv('kirio-search-wrap');
     const searchInput = searchWrap.createEl('input', {
       type: 'text', placeholder: '🔍  Search highlights…', cls: 'kirio-search',
     });
@@ -180,14 +259,12 @@ export class KirioView extends ItemView {
         const pageTitle = highlights[0]?.title || (() => { try { return new URL(url).hostname; } catch { return url; } })();
         const section   = listEl.createDiv('kirio-section');
 
-        // Page header
         const pageHeader = section.createDiv('kirio-page-header');
         pageHeader.createEl('span', { text: pageTitle, cls: 'kirio-page-title', title: url });
         const openBtn = pageHeader.createEl('a', { text: '↗', cls: 'kirio-open-link', title: 'Open in browser' });
         openBtn.href = url;
 
-        // Cards
-        filtered.forEach(h => this.renderCard(section, h));
+        filtered.forEach(h => this.renderHighlightCard(section, h));
       });
 
       if (shown === 0 && query) {
@@ -199,53 +276,208 @@ export class KirioView extends ItemView {
     searchInput.addEventListener('input', () => render(searchInput.value.trim()));
   }
 
-  // ── Single highlight card ────────────────────────────────────────────────
-  private renderCard(container: HTMLElement, h: Highlight) {
+  private renderHighlightCard(container: HTMLElement, h: Highlight) {
     const card = container.createDiv('kirio-card');
 
-    // Left colour accent bar
     const bar = card.createDiv('kirio-color-bar');
     const accentColor = h.color_tag?.startsWith('#') ? h.color_tag : '#fef08a';
     bar.style.backgroundColor = accentColor;
 
     const body = card.createDiv('kirio-card-body');
 
-    // Highlight text (truncated)
     const displayText = h.text.length > 220 ? h.text.substring(0, 220) + '…' : h.text;
     body.createEl('p', { text: displayText, cls: 'kirio-card-text' });
 
-    // Footer row
-    const footer = body.createDiv('kirio-card-footer');
-
-    const date = new Date(h.created_at).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'short', day: 'numeric',
-    });
+    const footer      = body.createDiv('kirio-card-footer');
+    const date        = new Date(h.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     footer.createEl('span', { text: date, cls: 'kirio-card-date' });
 
     const footerActions = footer.createDiv('kirio-card-actions');
 
-    // "Go to source" deep link
+    const goBtn = footerActions.createEl('a', { text: 'Source ↗', cls: 'kirio-go-btn', title: `Jump to: ${h.url}` });
+    goBtn.href = `${h.url}#kirio-${h.id}`;
+
+    const copyBtn = footerActions.createEl('button', { text: '📋 Copy', cls: 'kirio-copy-btn', title: 'Copy as Obsidian callout' });
+    copyBtn.addEventListener('click', () => {
+      const markdown = generateHighlightCallout(h);
+      navigator.clipboard.writeText(markdown).then(() => {
+        copyBtn.textContent = '✅ Copied!';
+        setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+      }).catch(() => new Notice('Could not copy to clipboard.'));
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── TAB 2: YOUTUBE ANNOTATIONS ───────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async loadAnnotations(root: HTMLElement) {
+    let content = root.querySelector('.kirio-content') as HTMLElement | null;
+    if (content) content.empty();
+    else content = root.createDiv('kirio-content');
+
+    content.createEl('p', { text: 'Loading annotations…', cls: 'kirio-loading' });
+
+    const { data: { user } } = await getSupabase().auth.getUser();
+    if (!user) { await this.render(); return; }
+
+    const { data, error } = await getSupabase()
+      .from('yt_annotations')
+      .select('*')
+      .eq('user_uuid', user.id)
+      .order('created_at', { ascending: false });
+
+    content.empty();
+
+    if (error) { content.createEl('p', { text: `Error: ${error.message}`, cls: 'kirio-error' }); return; }
+    if (!data || data.length === 0) { this.renderAnnotationsEmpty(content); return; }
+
+    this.annotations = data as YtAnnotation[];
+    this.renderAnnotationsList(content);
+  }
+
+  private renderAnnotationsEmpty(container: HTMLElement) {
+    const wrap = container.createDiv('kirio-empty');
+    wrap.createEl('div', { text: '▶', cls: 'kirio-empty-icon' });
+    wrap.createEl('p', { text: 'No YouTube annotations yet.' });
+    wrap.createEl('p', {
+      text: 'Click the 📌 button in the YouTube player or press Ctrl+A while watching a video.',
+      cls: 'kirio-empty-sub',
+    });
+  }
+
+  private renderAnnotationsList(container: HTMLElement) {
+    // Group by video_id
+    const grouped = new Map<string, YtAnnotation[]>();
+    for (const a of this.annotations) {
+      if (!grouped.has(a.video_id)) grouped.set(a.video_id, []);
+      grouped.get(a.video_id)!.push(a);
+    }
+
+    // Search bar
+    const searchWrap  = container.createDiv('kirio-search-wrap');
+    const searchInput = searchWrap.createEl('input', {
+      type: 'text', placeholder: '🔍  Search annotations…', cls: 'kirio-search',
+    });
+
+    // Stats
+    const stats = container.createDiv('kirio-stats');
+    stats.createEl('span', {
+      text: `${this.annotations.length} annotation${this.annotations.length !== 1 ? 's' : ''} · ${grouped.size} video${grouped.size !== 1 ? 's' : ''}`,
+      cls: 'kirio-stats-text',
+    });
+
+    const listEl = container.createDiv('kirio-list');
+
+    const render = (query: string) => {
+      listEl.empty();
+      let shown = 0;
+
+      grouped.forEach((annotations, videoId) => {
+        const filtered = query
+          ? annotations.filter(a =>
+              a.content.toLowerCase().includes(query.toLowerCase()) ||
+              a.video_title.toLowerCase().includes(query.toLowerCase()) ||
+              a.label.toLowerCase().includes(query.toLowerCase())
+            )
+          : annotations;
+        if (filtered.length === 0) return;
+        shown += filtered.length;
+
+        const videoTitle  = annotations[0]?.video_title || `Video ${videoId}`;
+        const channel     = annotations[0]?.channel || '';
+        const videoUrl    = `https://www.youtube.com/watch?v=${videoId}`;
+        const section     = listEl.createDiv('kirio-section');
+
+        // Video header
+        const pageHeader = section.createDiv('kirio-page-header');
+        const titleWrap  = pageHeader.createDiv('kirio-yt-title-wrap');
+        titleWrap.createEl('span', { text: '▶ ', cls: 'kirio-yt-icon' });
+        const titleEl = titleWrap.createEl('span', { text: videoTitle, cls: 'kirio-page-title', title: videoUrl });
+        if (channel) titleEl.title = `${videoTitle}\n${channel}`;
+
+        const headerRight = pageHeader.createDiv('kirio-page-header-right');
+        if (channel) {
+          headerRight.createEl('span', { text: channel, cls: 'kirio-yt-channel' });
+        }
+        const openBtn = headerRight.createEl('a', { text: '↗', cls: 'kirio-open-link', title: 'Open video' });
+        openBtn.href  = videoUrl;
+
+        // Sort by timestamp ascending within each video section
+        const sorted = [...filtered].sort((a, b) => a.seconds - b.seconds);
+        sorted.forEach(a => this.renderAnnotationCard(section, a));
+      });
+
+      if (shown === 0 && query) {
+        listEl.createEl('p', { text: 'No annotations match your search.', cls: 'kirio-loading' });
+      }
+    };
+
+    render('');
+    searchInput.addEventListener('input', () => render(searchInput.value.trim()));
+  }
+
+  private renderAnnotationCard(container: HTMLElement, a: YtAnnotation) {
+    const cfg       = YT_LABELS[a.label] ?? YT_LABELS.note;
+    const videoUrl  = `https://www.youtube.com/watch?v=${a.video_id}&t=${a.seconds}s`;
+
+    const card = container.createDiv('kirio-card');
+
+    // Red accent bar for all YouTube annotations
+    const bar = card.createDiv('kirio-color-bar');
+    bar.style.backgroundColor = '#fca5a5'; // kirio-red hex
+
+    const body = card.createDiv('kirio-card-body');
+
+    // Top row: timestamp chip + label pill
+    const topRow = body.createDiv('kirio-ann-top-row');
+
+    const tsChip = topRow.createEl('span', {
+      text: `⏱ ${formatSeconds(a.seconds)}`,
+      cls: 'kirio-ts-chip',
+      title: 'Jump to this moment',
+    });
+    // Clicking the timestamp chip opens the video at that exact second
+    tsChip.addEventListener('click', () => { window.open(videoUrl, '_blank'); });
+
+    topRow.createEl('span', {
+      text: `${cfg.icon} ${cfg.label}`,
+      cls: 'kirio-label-pill',
+    });
+
+    // Note content
+    if (a.content) {
+      const displayText = a.content.length > 220 ? a.content.substring(0, 220) + '…' : a.content;
+      body.createEl('p', { text: displayText, cls: 'kirio-card-text kirio-ann-content' });
+    } else {
+      body.createEl('p', { text: '(no note)', cls: 'kirio-card-text kirio-ann-no-content' });
+    }
+
+    // Footer
+    const footer  = body.createDiv('kirio-card-footer');
+    const date    = new Date(a.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    footer.createEl('span', { text: date, cls: 'kirio-card-date' });
+
+    const footerActions = footer.createDiv('kirio-card-actions');
+
     const goBtn = footerActions.createEl('a', {
       text: 'Source ↗',
       cls: 'kirio-go-btn',
-      title: `Jump to: ${h.url}`,
+      title: `Open video at ${formatSeconds(a.seconds)}`,
     });
-    goBtn.href = `${h.url}#kirio-${h.id}`;
+    goBtn.href = videoUrl;
 
-    // "Copy to Obsidian" button
     const copyBtn = footerActions.createEl('button', {
       text: '📋 Copy',
       cls: 'kirio-copy-btn',
       title: 'Copy as Obsidian callout',
     });
     copyBtn.addEventListener('click', () => {
-      const markdown = generateCallout(h);
+      const markdown = generateAnnotationCallout(a);
       navigator.clipboard.writeText(markdown).then(() => {
         copyBtn.textContent = '✅ Copied!';
         setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
-      }).catch(() => {
-        new Notice('Could not copy to clipboard.');
-      });
+      }).catch(() => new Notice('Could not copy to clipboard.'));
     });
   }
 

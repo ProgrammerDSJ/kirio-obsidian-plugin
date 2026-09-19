@@ -198,13 +198,126 @@
   color: rgb(30, 64, 175);
 }
 
-/* Red */
+/* Red — YouTube annotations use the play icon instead of highlighter */
 .callout[data-callout="kirio-red"] {
   --callout-color: 220, 38, 38;
+  --callout-icon: lucide-play;
   background-color: rgba(220, 38, 38, 0.08);
   border-color: rgba(220, 38, 38, 0.5);
 }
 .callout[data-callout="kirio-red"] .callout-title {
   background-color: rgba(220, 38, 38, 0.13);
   color: rgb(153, 27, 27);
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+.kirio-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+  background: var(--background-primary);
+}
+
+.kirio-tab {
+  flex: 1;
+  padding: 8px 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.kirio-tab:hover { color: var(--text-normal); }
+.kirio-tab.kirio-tab-active {
+  color: var(--color-blue);
+  border-bottom-color: var(--color-blue);
+}
+
+/* ── YouTube card extras ─────────────────────────────────────────────────── */
+
+/* Top row inside an annotation card: timestamp + label pill */
+.kirio-ann-top-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+/* Clickable timestamp chip */
+.kirio-ts-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-monospace);
+  color: var(--text-normal);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.kirio-ts-chip:hover {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: rgb(153, 27, 27);
+}
+
+/* Label pill (Note / Question / Important / Idea) */
+.kirio-label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+/* Dim "no note" placeholder */
+.kirio-ann-no-content {
+  color: var(--text-faint) !important;
+  font-style: italic;
+}
+
+/* Red left bar for YouTube annotation cards */
+.kirio-card .kirio-color-bar[style*="fca5a5"] {
+  background-color: #fca5a5;
+}
+
+/* Video header: title row with play icon */
+.kirio-yt-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.kirio-yt-icon { font-size: 10px; color: var(--color-red); flex-shrink: 0; }
+
+/* Right side of video header: channel + open link */
+.kirio-page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.kirio-yt-channel {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
 }

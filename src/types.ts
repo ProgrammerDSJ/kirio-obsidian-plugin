@@ -10,6 +10,19 @@ export interface Highlight {
   created_at: string;
 }
 
+export interface YtAnnotation {
+  id: string;
+  user_uuid: string;
+  video_id: string;
+  video_title: string;
+  channel: string;
+  seconds: number;
+  label: string;       // 'note' | 'question' | 'important' | 'idea'
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface KirioSettings {
   supabaseUrl: string;
   supabaseAnonKey: string;

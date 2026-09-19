@@ -1,7 +1,7 @@
 {
   "id": "kirio-highlights",
   "name": "Kirio",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "minAppVersion": "1.8.0",
   "description": "View and navigate your Kirio web highlights inside your notes.",
   "author": "Devansh Jhawar",
