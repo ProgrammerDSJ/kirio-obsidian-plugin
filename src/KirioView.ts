@@ -2,80 +2,14 @@ import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import { getSupabase } from './supabaseClient';
 import { LoginModal } from './LoginModal';
 import { Highlight, YtAnnotation } from './types';
+import {
+  generateHighlightCallout,
+  generateAnnotationCallout,
+  formatSeconds,
+  YT_LABELS,
+} from './callouts';
 
 export const KIRIO_VIEW_TYPE = 'kirio-highlights-view';
-
-// ── Color → Obsidian callout type mapping (web highlights) ────────────────
-const HEX_TO_CALLOUT: Record<string, string> = {
-  '#fef08a': 'kirio-yellow',
-  '#f9a8d4': 'kirio-pink',
-  '#86efac': 'kirio-green',
-  '#93c5fd': 'kirio-blue',
-  '#fca5a5': 'kirio-red',
-};
-
-function getCalloutType(hexColor: string): string {
-  return HEX_TO_CALLOUT[hexColor?.toLowerCase()] ?? 'kirio-yellow';
-}
-
-// ── Label config (mirrors extension) ──────────────────────────────────────
-const YT_LABELS: Record<string, { icon: string; label: string }> = {
-  note:      { icon: '📝', label: 'Note' },
-  question:  { icon: '❓', label: 'Question' },
-  important: { icon: '⭐', label: 'Important' },
-  idea:      { icon: '💡', label: 'Idea' },
-};
-
-// ── Callout generators ─────────────────────────────────────────────────────
-
-/**
- * Web-highlight callout (existing format).
- * > [!kirio-pink] [Page Title ↗](url#kirio-id)
- * > "Highlighted text"
- */
-function generateHighlightCallout(h: Highlight): string {
-  const calloutType = h.color_tag?.startsWith('#')
-    ? getCalloutType(h.color_tag)
-    : 'kirio-yellow';
-
-  const title       = h.title || (() => { try { return new URL(h.url).hostname; } catch { return h.url; } })();
-  const deepLink    = `${h.url}#kirio-${h.id}`;
-  const escapedText = h.text.replace(/>/g, '\\>');
-
-  return `> [!${calloutType}] [${title} ↗](${deepLink})\n> "${escapedText}"`;
-}
-
-/**
- * YouTube annotation callout — always kirio-red.
- * > [!kirio-red] [Video Title ↗](https://youtube.com/watch?v=ID&t=Ns)
- * > ⏱ 13:41 · ⭐ Important
- * > "Annotation content"
- */
-function generateAnnotationCallout(a: YtAnnotation): string {
-  const cfg        = YT_LABELS[a.label] ?? YT_LABELS.note;
-  const videoUrl   = `https://www.youtube.com/watch?v=${a.video_id}&t=${a.seconds}s`;
-  const title      = a.video_title || `YouTube — ${a.video_id}`;
-  const timestamp  = formatSeconds(a.seconds);
-  const labelLine  = `${cfg.icon} ${cfg.label}`;
-  const timeLine   = `⏱ ${timestamp}`;
-
-  const lines = [
-    `> [!kirio-red] [${title} ↗](${videoUrl})`,
-    `> ${timeLine} · ${labelLine}`,
-  ];
-  if (a.content) {
-    lines.push(`> "${a.content.replace(/>/g, '\\>')}"`);
-  }
-  return lines.join('\n');
-}
-
-function formatSeconds(sec: number): string {
-  const s = Math.floor(sec) % 60;
-  const m = Math.floor(sec / 60) % 60;
-  const h = Math.floor(sec / 3600);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
-}
 
 // ── View ──────────────────────────────────────────────────────────────────
 type Tab = 'highlights' | 'youtube';

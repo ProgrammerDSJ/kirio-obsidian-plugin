@@ -1,8 +1,11 @@
-import { Plugin } from 'obsidian';
+import { Editor, Plugin } from 'obsidian';
 import { KirioView, KIRIO_VIEW_TYPE } from './KirioView';
 import { KirioSettingsTab } from './KirioSettingsTab';
 import { initSupabase } from './supabaseClient';
 import { KirioSettings, DEFAULT_SETTINGS } from './types';
+import { KirioAnnotationSuggest } from './KirioAnnotationSuggest';
+import { KirioHighlightSuggest } from './KirioHighlightSuggest';
+import { KirioAnnotationModal, KirioHighlightModal } from './KirioQuickInsert';
 
 export default class KirioPlugin extends Plugin {
   settings: KirioSettings;
@@ -29,6 +32,34 @@ export default class KirioPlugin extends Plugin {
         this.activateView();
       }
     });
+
+    // ── 7. Inline EditorSuggesters (\a and \h triggers) ─────────────────
+    this.registerEditorSuggest(new KirioAnnotationSuggest(this.app));
+    this.registerEditorSuggest(new KirioHighlightSuggest(this.app));
+
+    // ── 8. Quick-insert commands (Alt+A and Alt+H) ───────────────────────
+
+    this.addCommand({
+      id: 'kirio-insert-annotation',
+      name: 'Insert YouTube annotation (Alt+A)',
+      hotkeys: [{ modifiers: ['Alt'], key: 'a' }],
+      editorCallback: async (editor: Editor) => {
+        const modal = new KirioAnnotationModal(this.app, editor);
+        await modal.loadItems();
+        modal.open();
+      },
+    });
+
+    this.addCommand({
+      id: 'kirio-insert-highlight',
+      name: 'Insert web highlight (Alt+H)',
+      hotkeys: [{ modifiers: ['Alt'], key: 'h' }],
+      editorCallback: async (editor: Editor) => {
+        const modal = new KirioHighlightModal(this.app, editor);
+        await modal.loadItems();
+        modal.open();
+      },
+    });
   }
 
   /** Opens the Kirio panel in the right sidebar, creating it if needed. */
@@ -37,16 +68,10 @@ export default class KirioPlugin extends Plugin {
     const existing = workspace.getLeavesOfType(KIRIO_VIEW_TYPE);
 
     if (existing.length > 0) {
-      // Panel already exists — revealLeaf expands the sidebar AND focuses the leaf.
-      // The old setActiveLeaf() only focused it internally; if the right sidebar
-      // was collapsed it stayed hidden and nothing appeared to happen.
       workspace.revealLeaf(existing[0]);
       return;
     }
 
-    // getRightLeaf(true) creates the right sidebar pane when it doesn't exist yet.
-    // The old value of false returned null whenever the sidebar was closed/empty,
-    // causing the guard `if (!leaf) return` to silently bail out — panel never opened.
     const leaf = workspace.getRightLeaf(true);
     if (!leaf) return;
     await leaf.setViewState({ type: KIRIO_VIEW_TYPE, active: true });

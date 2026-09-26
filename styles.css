@@ -201,14 +201,25 @@
   color: rgb(30, 64, 175);
 }
 
-/* Red — YouTube annotations use the play icon instead of highlighter */
-.callout[data-callout="kirio-red"] {
+/* Red — web highlights (highlighter icon, same as all other highlight colors) */
+.callout[data-callout="kirio-red-highlight"] {
+  --callout-color: 220, 38, 38;
+  background-color: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.5);
+}
+.callout[data-callout="kirio-red-highlight"] .callout-title {
+  background-color: rgba(220, 38, 38, 0.13);
+  color: rgb(153, 27, 27);
+}
+
+/* Red — YouTube annotations (play icon) */
+.callout[data-callout="kirio-red-annotation"] {
   --callout-color: 220, 38, 38;
   --callout-icon: lucide-play;
   background-color: rgba(220, 38, 38, 0.08);
   border-color: rgba(220, 38, 38, 0.5);
 }
-.callout[data-callout="kirio-red"] .callout-title {
+.callout[data-callout="kirio-red-annotation"] .callout-title {
   background-color: rgba(220, 38, 38, 0.13);
   color: rgb(153, 27, 27);
 }
@@ -318,4 +329,99 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Kirio suggestion items
+   Used by \a / \h EditorSuggesters AND Alt+A / Alt+H FuzzySuggestModals.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kirio-suggest-item {
+  padding: 6px 8px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Top row: icon/swatch + title */
+.kirio-si-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ▶ play icon for annotation items */
+.kirio-si-play {
+  font-size: 10px;
+  color: var(--color-red);
+  flex-shrink: 0;
+}
+
+/* Color swatch for highlight items */
+.kirio-si-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background-color: var(--kirio-swatch, #fef08a);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.kirio-si-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Meta row: timestamp chip + label + channel */
+.kirio-si-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kirio-si-ts {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
+}
+
+.kirio-si-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.kirio-si-channel {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* URL hostname (highlight items) */
+.kirio-si-url {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Content / text preview */
+.kirio-si-preview {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
